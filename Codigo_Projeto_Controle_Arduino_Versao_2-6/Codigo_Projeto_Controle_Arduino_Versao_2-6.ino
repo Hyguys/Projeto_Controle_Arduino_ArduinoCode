@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 2.6 22 DE JULHO DE 2023            #
+# VERSÃO 2.7 25 DE JULHO DE 2023          #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -46,12 +46,12 @@ const int pinBuzzer = 3; //pino do buzzer - buzzer nada mais é que um mini somz
 /* SEÇÃO DE DEFINIÇÃO DE PARÂMETROS DE CONTROLE */
 /*CONTROLE DA VAZÃO*/
 int controlTypePump = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo
-float flowSetpoint = 40; //setpoint da vazão L/hr (faixa de operação da bomba 0 - 60 L/hr)
-float kcPump = 2; //ganho do controlador da bomba, dado nas unidades de %hr/L.
+float flowSetpoint = 35; //setpoint da vazão L/hr (faixa de operação da bomba 0 - 60 L/hr)
+float kcPump = 1; //ganho do controlador da bomba, dado nas unidades de %hr/L.
 //nos relatórios da IC, os valores tão multiplicados por 60, pois a medida antes era em L/min.
-float tauIPump = 5; //tau I em segundos. lembrando das aulas de controle, se tauI tende a infinito, o termo integral tende à zero.
+float tauIPump = 2; //tau I em segundos. lembrando das aulas de controle, se tauI tende a infinito, o termo integral tende à zero.
 //portanto, ao iniciarmos o controle com um tauI grande, estamos iniciando com o controle integral desativado.
-float tauDPump = 10; //tau D em segundos. iniciando em zero, iniciamos com o controle derivativo desativado.
+float tauDPump = 1; //tau D em segundos. iniciando em zero, iniciamos com o controle derivativo desativado.
 float i=0; //variavel auxiliar que será usada para armazenar o valor da porcentagem de acionamento da bomba.
 float oldErrorPump = 0; //essa é uma variável global que vai armazenar o erro anterior de controle, ou seja, o erro na última medida (equivalente à e_k-1)
 float oldTimeControlPump = 0; //essa é uma variável global que vai armazenar o último tempo, ou seja, o tempo da última medida (EM milissegundos)
@@ -79,8 +79,7 @@ float oldTemp = 0; //variavel que vai armazenar o valor da variavel controlada d
 float oldOldTemp = 0; //variavel que vai armazenar o valor da variavel controlada de 2 instantes de temp atrás
 
 /* CONTROLE AVANÇADO TEMPERATURA - CASCATA E FEEDFORWARD */
-//Está aqui, mas continua a implementação na forma de POSIÇÃO, que é a forma ANTIGA do controle, mudamos para a forma de VELOCIDADE
-//. Tem que ser implementada a forma de VELOCIDADE para que se possa tirar o biasFlowSetpoint.
+//Está aqui, mas continua a implementação na forma de POSIÇÃO. Tem que ser implementada a forma de VELOCIDADE para que se possa tirar o biasFlowSetpoint.
 //Tem que ler o capítulo 14, 15 e 16 lá e buscar no Solution do Seborg 4a edição pra buscar a forma do controle PID + feedforward digital na forma de velocidade.
 float biasFlowSetpoint = 0;
 float oldj = 0;
@@ -98,16 +97,18 @@ unsigned long oldTimeFlow = 0; // tempo inicial do arduino, tempo de quanto temp
 unsigned long oldTimeSampling = 0; //tempo inicial do arduino, tempo anterior de amostragem de tempo.
 float totalMilliLitres = 0; // volume inicial
 float flowMax = 72; //se a vazao passar disso ele trava a leitura nesse valor para não atrapalhar o controle. é sabido de problemas no leitor do sensor de temperatura
+int flowSpikeProtectionMax = 75; //quantidade de vezes que ele tolera a vazão ficar maluca seguido.
+int flowSpikeCount = 0;
 
 /* SEÇÃO DE CONFIGURAÇÕES DAS BIBLIOTECAS UTILIZADAS */
 SoftwareSerial newSerial =  SoftwareSerial(rxPin, txPin); //criando a nova porta serial usando os pinos de transmissão e recepção de informação definidos anteriormente
 Thermistor sensorTIN(0); //VARIÁVEL DO TIPO THERMISTOR, INDICANDO O PINO ANALÓGICO (A0) EM QUE O TERMISTOR ESTÁ CONECTADO
-Thermistor sensorTOUT(4); //VARIÁVEL DO TIPO THERMISTOR, INDICANDO O PINO ANALÓGICO (A5) EM QUE O TERMISTOR ESTÁ CONECTADO
+Thermistor sensorTOUT(4); //VARIÁVEL DO TIPO THERMISTOR, INDICANDO O PINO ANALÓGICO (A4) EM QUE O TERMISTOR ESTÁ CONECTADO
 
 /* CONFIGURAÇÕES DAS MÉDIAS UTILIZADAS */
 /* MÉDIA MÓVEL */
-int mediaMovelT = 5; //qual é o tamanho da média movel utilizada. 1 para desligado. N ultimos pontos, max = 40.
-int mediaMovelFlow = 5; //qual é o tamanho da média movel utilizada, 1 para desligado. N ultimos pontos, max = 40.
+int mediaMovelT = 10; //qual é o tamanho da média movel utilizada. 1 para desligado. N ultimos pontos, max = 40.
+int mediaMovelFlow = 8; //qual é o tamanho da média movel utilizada, 1 para desligado. N ultimos pontos, max = 40.
 
 //vetor que irá armazenar os antigos dados da média móvel. 
 float tempInVector[40];
@@ -120,7 +121,7 @@ int indexFlow = 0;
 /*MÉDIA MOVEL EXPONENCIAL*/
 //para desligar a média movel exponencial, fazer alfa = 1.
 float alfaTemp = 0.1; //recomenda-se valores entre 0.05 e 0.3. 0.1 indica que a medida atual tem o valor somente de 10%, sendo o 90% sendo o peso das medidas anteriores.
-float alfaFlow = 0.7; //recomenda-se valores entre 0.3 e 0.8. 0.1 indica que a medida atual tem o valor somente de 10%, sendo o 90% sendo o peso das medidas anteriores.
+float alfaFlow = 0.4; //recomenda-se valores entre 0.3 e 0.8. 0.1 indica que a medida atual tem o valor somente de 10%, sendo o 90% sendo o peso das medidas anteriores.
 float oldTempIn; //valor antigo da temperatura de entrada.
 float oldTempOut; //valor antigo da temperatura de saida.
 
@@ -129,22 +130,23 @@ char command[20];
 int commandIndex = 0;
 
 
-/* SEÇÃO DE VARIÁVEIS AUXILIARES PARA RAMPA DE SETPOINT */
+// Variáveis globais
 bool rampFlowActive = false;   // Indica se a rampa está em progresso
 bool rampTempActive = false;
-float rampInitialTime = 0; // tempo inicial da rampa
-float rampInitialPoint = 0; // setpoint inicial
+float rampInitialTime = 0;
+float rampInitialPoint = 0;
 float rampFinalTime = 0.0;  // Duração da rampa em segundos
-float rampTarget = 0.0;    // Valor final da rampa, ou seja, setpoint final
+float rampTarget = 0.0;    // Valor final da rampa
 
 
 /*SEÇÃO DO CÓDIGO DO ARDUINO*/
 void setup()
 {
-  Serial.begin(115200); //inicializa porta serial com velocidade de transmissão de 115200
-  newSerial.begin(115200); //inicializa a nossa software serial (porta 12) com velocidade de transmissão de 115200 também
+  Serial.begin(115200); //inicializa porta serial com velocidade de transmissão de 9600
+  newSerial.begin(115200); //inicializa a nossa software serial (porta 12) com velocidade de transmissão de 9600 também
   pinMode(sensorPin, INPUT); //inicialização de pino do sensor de vazão como input
   digitalWrite(sensorPin, HIGH); //inicialização do pino do sensor como LIGADO (os pulsos são contados na queda, por isso tem que começar ligado)
+  
   pinMode(IN1,OUTPUT); //inicializa porta 'positiva' do driver como saida
   pinMode(IN2,OUTPUT);//inicializa porta 'negativa' do driver como saida
   pinMode(pinPump,OUTPUT); //inicializa porta de controle da velocidade da bomba como saida
@@ -159,30 +161,24 @@ void setup()
   pino do sensor de vazão, o procedimento "pulseCounter" irá rodar, e enquanto o procedimento estiver rodando, o tempo de processamento
   do millis() não será contado.
   Em suma, configuramos como será feita a contagem de pulsos. Posteriormente será usado para medição de frequencia.*/
-  attachInterrupt(sensorInterrupt, pulseCounter, FALLING); //you can use Rising or Falling
+  //attachInterrupt(sensorInterrupt, pulseCounter, FALLING); //you can use Rising or Falling
   
 }
 
 void loop()
 {
 /* SEÇÃO DE RECEBIMENTO DE INFORMAÇÕES DA PORTA SERIAL */
-
-while (Serial.available() > 0) //Inicia o While somente quando recebeu alguma informação pela porta serial!
-{
+while (Serial.available() > 0) {
   char c = Serial.read();
 
-  if (c == '\n') 
-  { // Fim do comando
+  if (c == '\n') { // Fim do comando
     command[commandIndex] = '\0'; // Adiciona o caractere nulo ao final da string
     processCommand(command);
     commandIndex = 0; // Reiniciar o índice para a próxima linha
-  } 
-  else if (commandIndex < sizeof(command) - 1) //Se o caractere lido não é o fim de linha, adicionar o caractere ao final da char command. (ele vai adicionando letra por letra até ler a linha toda.)
-  {
+  } else if (commandIndex < sizeof(command) - 1) {
     command[commandIndex] = c;
     commandIndex++;
   }
-
 }
 
 /*SEÇÃO DE RAMPAS DO SETPOINT, SE ESTIVEREM ATIVAS*/
@@ -230,7 +226,7 @@ if (rampTempActive == true)
 
 
 
-/*SEÇÃO DE CÓDIGOS QUE É REALIZADA A CADA INTERVALO DE TEMPO DE AMOSTRAGEM*/
+/*SEÇÃO DE CÓDIGOS QUE É REALIZADA A INTERVALO DE TEMPO DE AMOSTRAGEM*/
 
   if((millis() - oldTimeSampling) > interval)    //Fazer esse cálculo somente quando o intervalo de amostragem passar.
    // ou seja, o if só é valor quando já se passarem interval milissegundos desde o último instante.
@@ -260,8 +256,23 @@ if (rampTempActive == true)
 
     /* SEÇÃO DE TOMADA DAS TEMPERATURAS */
     float tempIn = sensorTIN.getTemp();
+    if (isnan(tempIn))
+    {
+      tempIn = 0;
+      for(int k=0 ; k<mediaMovelT ; k++)
+      {
+        tempInVector[k] = 0;
+      }
+    }
     float tempOut = sensorTOUT.getTemp();
-    
+     if (isnan(tempOut))
+    {
+      tempOut = 0;
+      for(int k=0 ; k<mediaMovelT ; k++)
+      {
+        tempOutVector[k] = 0;
+      }
+    }
 
     /*SEÇÃO DE CRIAÇÃO DO VETOR DE MEDIDAS PARA CÁLCULO DA MÉDIA MÓVEL */
     //assignação da temperatura de entrada na última casa do vetor
@@ -291,11 +302,26 @@ if (rampTempActive == true)
     }
 
     //mesma coisa agora a vazão.
+
+    /*FILTRO SPIKE VAZÃO */
     //Filtro contra spike de vazão. É sabido que a bomba não bombeia a uma vazão superior à flowMax, portanto, quando medidas superiores à essa aparecem, devemos desconsiderá-las e repetir a medida anterior.
+    // Após um certo tempo ele desliga a bomba. Quando isso acontecer, usar somente <80% < 40 L/h
     //TO-DO: implementar um check melhor. Esse é muito rudimentar. Avaliar a média movel da vazão, desvio-padrão, algo assim.
     if (flowRate > flowMax) 
     {
       flowRate = oldFlowAvg;
+      flowSpikeCount++;
+      if (flowSpikeCount > flowSpikeProtectionMax)
+      {
+            controlTypePump = 0;
+            oldFlow = 0;
+            oldOldFlow = 0;
+            oldErrorPump = 0;
+            i = 0;
+            buzzerOK();
+            pumpPower = 0;
+            flowSpikeCount = 0;
+      }
     }
 
     flowVector[indexFlow] = flowRate;
@@ -412,8 +438,8 @@ if (rampTempActive == true)
 
 
     /*SEÇÃO DE PRINT DE DADOS PARA COMUNICAÇÃO COM A INTERFACE */
-    //Hoje, na versão atual, temos a seguinte estrutura de comunicação, em ordem, separado por somente UM espaço.
-    //tempo_desde_inicio_em_s vazao_filtrada setpoint_vazao potencia_bomba histerese_vazao temp_in_filtrada temp_out_filtrada setpoint_temp potencia_res histerese_temp vazao_antesfiltro temp_antesfiltro 
+    //Hoje, temos a seguinte estrutura de comunicação, em ordem, separado por somente UM espaço.
+    //tempo_desde_inicio_em_ms vazao_filtrada setpoint_vazao potencia_bomba histerese_vazao temp_in_filtrada temp_out_filtrada setpoint_temp potencia_res histerese_temp vazao_antesfiltro temp_saida_antesfiltro temp_entrada_antesfiltro 
     Serial.print(float(float(millis())/1000),2);
 
     Serial.print(" ");
@@ -458,17 +484,22 @@ if (rampTempActive == true)
 
     Serial.print(" ");
 
-    Serial.println(tempOut);
+    Serial.print(tempOut);
 
+    Serial.print(" ");
+
+    Serial.println(tempIn);
+
+    // Reset the pulse coun1ter so we can start incrementing again
     //Zera todos os pulsos contados até agora.
     pulseCount = 0;
     
-    // Habilitar o interrupt novamente agora que já finalizamos todos os cálculos, retomada da contagem de pulsos!
+      // Habilitar o interrupt novamente agora que já finalizamos todos os cálculos, retomada da contagem de pulsos!
     // A água que passou pelo sensor enquanto estávamos fazendo os cálculos não foi contada.
     // Retomar a contar água!
     attachInterrupt(sensorInterrupt, pulseCounter, FALLING);
-    
-    // Após finalização de todo o código, retomar o contador de tempo.
+
+     // Após finalização de todo o código, retomar o contador de tempo.
     oldTimeFlow = millis();
   }
 
@@ -509,7 +540,6 @@ float controlPIPumpVelocity(float kc, float tauI, float y, float ysp, float oldP
   return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
 }
 
-
 // controle proporcional integral derivativo da vazão modo velocidade
 float controlPIDPumpVelocity(float kc, float tauI, float tauD, float y, float ysp, float oldPower, const int lowerlimit, const int upperlimit)
 {
@@ -532,7 +562,6 @@ float controlPResVelocity(float kc, float y, float ysp, float oldPower, const in
   oldErrorRes = error;
   return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
 }
-
 
 // controle proporcional integral da temp modo velocidade
 float controlPIResVelocity(float kc, float tauI, float y, float ysp, float oldPower, const int lowerlimit, const int upperlimit)
@@ -557,6 +586,7 @@ float controlPIDResVelocity(float kc, float tauI, float tauD, float y, float ysp
   oldTemp = y;
   return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
 }
+
 
 // função que checa se haverá saturação do atuador. por exemplo potencia máxima é 100. se a potencia atual é 80, e a variação de potencia calculada foi de
 // 30, a próxima potencia será de 110, mas isso é superior à 100%. essa função não permite que os limites do atuador sejam violados
@@ -587,12 +617,15 @@ void manipulatePump(float i)
  analogWrite(pinPump,i*255/100);
 }
 
+//função usada para manipular a potencia da res.
 void manipulateRes(float i)
 {
  enviaDimmer(int(i*22/100 + 0.5));
 }
 
+//Insterrupt Service Routine - O CÓDIGO QUE SERÁ EXECUTADO TODA VEZ QUE O PULSO CAIR
 //Interrupt Service Routine - O CÓDIGO QUE SERÁ EXECUTADO TODA VEZ QUE O PULSO DE QUEDA FOR DETECTADO
+
 void pulseCounter()
 {
   // Increment the pulse counter
@@ -634,7 +667,6 @@ void enviaDimmer(uint8_t nivel) //0 até 23
 
 // essa função é usada para converter a cadeia de caracteres recebida pela porta serial em COMANDOS
 // cada comando significa uma coisa.
-
 void processCommand(const char* cmd) {
   if (strncmp(cmd, "IS ", 3) == 0) {
     interval = atoi(cmd + 3);
@@ -950,4 +982,3 @@ float feedForwardPIDPosition(float kc,float tauI,float tauD,float y,float ysp,fl
   if (u < lowerlimit) {u = lowerlimit;}else{oldIntegralRes = I;}
   
   return u;
-}
