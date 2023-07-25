@@ -62,6 +62,9 @@ float pumpPower = 0; //variavel auxiliar que será usada para armazenar o valor 
 float oldFlow = 0; //variavel que vai armazenar o valor da variavel controlada de 1 instante de temp atrás
 float oldOldFlow = 0; //variavel que vai armazenar o valor da variavel controlada de 2 instantes de temp atrás
 
+float upperLimitPump = 100; //limite superior da bomba
+float lowerLimitPump = 0; //limite inferior da bomba
+
 /*CONTROLE DA TEMPERATURA*/
 float tempSetpoint = 30; //setpoint da temperatura em graus celsius
 int controlTypeRes = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo 5 - CASCATAP 6 - CASCATAPI 7 - CASCATAPID 8 - FEEDFORWARD+P 9 - FFPI 10 - FFPID tipo de controle da RESISTENCIA
@@ -77,6 +80,9 @@ float hysteresisTemp = 3; //valor da histerese inicial.
 float resPower = 0; //variavel auxiliar que será usada para armazenar o valor da porcentagem de acionamento da potencia da resistencia (NOVA)
 float oldTemp = 0; //variavel que vai armazenar o valor da variavel controlada de 1 instante de temp atrás
 float oldOldTemp = 0; //variavel que vai armazenar o valor da variavel controlada de 2 instantes de temp atrás
+
+float upperLimitRes = 100; //limite superior da resistência para o controle ON-OFF
+float lowerLimitRes = 0; //limite inferior da resistência para o controle ON-OFF
 
 /* CONTROLE AVANÇADO TEMPERATURA - CASCATA E FEEDFORWARD */
 //Está aqui, mas continua a implementação na forma de POSIÇÃO. Tem que ser implementada a forma de VELOCIDADE para que se possa tirar o biasFlowSetpoint.
@@ -389,22 +395,23 @@ if (rampTempActive == true)
     switch (controlTypePump)
     {
       case 0: //MANUAL
-        i = pumpPower;
+        //i = pumpPower; //essa linha aqui é sem checar saturação.
+        i = checkSaturation(i,pumpPower-i,lowerLimitPump,upperLimitPump);
         break;
       case 1: //ON-OFF
-        i = onoff(flowAvg,flowSetpoint,hysteresisFlow,i,0,100);
+        i = onoff(flowAvg,flowSetpoint,hysteresisFlow,i,lowerLimitPump,upperLimitPump);
         break;
       case 2: //P
-        //i = controlPPosition(kcPump,flowAvg,flowSetpoint,pumpPower,0,100);
-        i = controlPPumpVelocity(kcPump,flowAvg,flowSetpoint,i,0,100);
+        //i = controlPPosition(kcPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        i = controlPPumpVelocity(kcPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         break;
       case 3: //PI
-        //i = controlPIPumpPosition(kcPump,tauIPump,flowAvg,flowSetpoint,pumpPower,0,100);
-        i = controlPIPumpVelocity(kcPump,tauIPump,flowAvg,flowSetpoint,i,0,100);
+        //i = controlPIPumpPosition(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        i = controlPIPumpVelocity(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         break;
       case 4: //PID
-        //i = controlPIDPumpPosition(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,pumpPower,0,100);
-        i = controlPIDPumpVelocity(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,0,100);
+        //i = controlPIDPumpPosition(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        i = controlPIDPumpVelocity(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         break;
     }
     oldTimeControlPump = millis();
@@ -413,46 +420,47 @@ if (rampTempActive == true)
     switch (controlTypeRes)
     {
       case 0: //MANUAL
-        j = resPower;
+        //j = resPower; //essa linha aqui é sem checar saturação.
+        j = checkSaturation(j,resPower,lowerLimitRes,upperLimitRes);
         break;
       case 1: //ON-OFF
-        j = onoff(tempOutAvg,tempSetpoint,hysteresisTemp,j,0,100);
+        j = onoff(tempOutAvg,tempSetpoint,hysteresisTemp,j,lowerLimitRes,upperLimitRes);
         break;
       case 2: //P
-        //j = controlPPosition(kcRes,tempOutAvg,tempSetpoint,resPower,0,100);
-        j = controlPResVelocity(kcRes,tempOutAvg,tempSetpoint,j,0,100);
+        //j = controlPPosition(kcRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        j = controlPResVelocity(kcRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         break;
       case 3: //PI
-        //j = controlPIResPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,resPower,0,100);
-        j = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,0,100);
+        //j = controlPIResPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        j = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         break;
       case 4: //PID
-        //j = controlPIDResPosition(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,resPower,0,100);
-        j = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,0,100);
+        //j = controlPIDResPosition(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        j = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         break;
-      //case 5:
-        //j = resPower;
-        //flowSetpoint = controlPPosition(kcRes,tempOutAvg,tempSetpoint,biasFlowSetpoint,0,100);
-        //break;
-      //case 6:
-        //j = resPower;
-        //flowSetpoint = controlPIResPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,biasFlowSetpoint,0,100);
-        //break;
-      //case 7:
-        //j = resPower;
-        //flowSetpoint = controlPIDResPosition(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,biasFlowSetpoint,0,100);
-        //break;
+      case 5: //Cascata P
+        j = resPower;
+        flowSetpoint = controlPResVelocity(kcRes,tempOutAvg,tempSetpoint,j,0,70);
+        break;
+      case 6: //Cascata PI
+        j = resPower;
+        flowSetpoint = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,0,70);
+        break;
+      case 7: //Cascata PID
+        j = resPower;
+        flowSetpoint = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,0,70);
+        break;
       //case 8:
         //oldj = j;
-        //j = feedForwardPPosition(kcRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,0,100);
+        //j = feedForwardPPosition(kcRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,lowerLimitRes,upperLimitRes);
         //break;
       //case 9:
         //oldj = j;
-        //j = feedForwardPIPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,0,100);
+        //j = feedForwardPIPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,lowerLimitRes,upperLimitRes);
         //break;
       //case 10:
         //oldj = j;
-        //j = feedForwardPIPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,0,100);
+        //j = feedForwardPIPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,lowerLimitRes,upperLimitRes);
         //break;
     }
     oldTimeControlRes = millis();
@@ -689,26 +697,31 @@ void enviaDimmer(uint8_t nivel) //0 até 23
 
 // essa função é usada para converter a cadeia de caracteres recebida pela porta serial em COMANDOS
 // cada comando significa uma coisa.
-void processCommand(const char* cmd) {
-  if (strncmp(cmd, "IS ", 3) == 0) {
+void processCommand(const char* cmd) 
+{
+  if (strncmp(cmd, "IS ", 3) == 0) 
+  {
     interval = atoi(cmd + 3);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "SPF ", 4) == 0) {
+  if (strncmp(cmd, "SPF ", 4) == 0) 
+  {
     flowSetpoint = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "SPT ", 4) == 0) {
+  if (strncmp(cmd, "SPT ", 4) == 0) 
+  {
     tempSetpoint = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "CTP ", 4) == 0) {
+  if (strncmp(cmd, "CTP ", 4) == 0) 
+  {
     controlTypePump = atoi(cmd + 4);
     oldFlow = 0;
     oldOldFlow = 0;
@@ -718,7 +731,8 @@ void processCommand(const char* cmd) {
     return;
   }
   
-  if (strncmp(cmd, "CTR ", 4) == 0) {
+  if (strncmp(cmd, "CTR ", 4) == 0) 
+  {
     controlTypeRes = atoi(cmd + 4);
     oldTemp = 0;
     oldOldTemp = 0;
@@ -728,87 +742,101 @@ void processCommand(const char* cmd) {
     return;
   }
   
-  if (strncmp(cmd, "PP ", 3) == 0) {
+  if (strncmp(cmd, "PP ", 3) == 0) 
+  {
     pumpPower = atof(cmd + 3);
     pumpPower = int(pumpPower * 255 / 100 + 0.5) * 100 / 255;
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "RP ", 3) == 0) {
+  if (strncmp(cmd, "RP ", 3) == 0) 
+  {
     resPower = atof(cmd + 3);
     resPower = int(resPower * 22 / 100 + 0.5) * 100 / 22;
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "KCP ", 4) == 0) {
+  if (strncmp(cmd, "KCP ", 4) == 0) 
+  {
     kcPump = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "TIP ", 4) == 0) {
+  if (strncmp(cmd, "TIP ", 4) == 0) 
+  {
     tauIPump = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "TDP ", 4) == 0) {
+  if (strncmp(cmd, "TDP ", 4) == 0) 
+  {
     tauDPump = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "KCR ", 4) == 0) {
+  if (strncmp(cmd, "KCR ", 4) == 0) 
+  {
     kcRes = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "TIR ", 4) == 0) {
+  if (strncmp(cmd, "TIR ", 4) == 0) 
+  {
     tauIRes = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "TDR ", 4) == 0) {
+  if (strncmp(cmd, "TDR ", 4) == 0) 
+  {
     tauDRes = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "HF ", 3) == 0) {
+  if (strncmp(cmd, "HF ", 3) == 0) 
+  {
     hysteresisFlow = atof(cmd + 3);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "HT ", 3) == 0) {
+  if (strncmp(cmd, "HT ", 3) == 0) 
+  {
     hysteresisTemp = atof(cmd + 3);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "KFF ", 4) == 0) {
+  if (strncmp(cmd, "KFF ", 4) == 0) 
+  {
     kFF = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "T1F ", 4) == 0) {
+  if (strncmp(cmd, "T1F ", 4) == 0) 
+  {
     tau1FF = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "T2F ", 4) == 0) {
+  if (strncmp(cmd, "T2F ", 4) == 0) 
+  {
     tau2FF = atof(cmd + 4);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "MMT ", 4) == 0) {
+  if (strncmp(cmd, "MMT ", 4) == 0) 
+  {
     mediaMovelT = atoi(cmd + 4);
     indexIn = 0;
     indexOut = 0;
@@ -816,26 +844,30 @@ void processCommand(const char* cmd) {
     return;
   }
   
-  if (strncmp(cmd, "MMF ", 4) == 0) {
+  if (strncmp(cmd, "MMF ", 4) == 0) 
+  {
     mediaMovelFlow = atoi(cmd + 4);
     indexFlow = 0;
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "AT ", 3) == 0) {
+  if (strncmp(cmd, "AT ", 3) == 0) 
+  {
     alfaTemp = atof(cmd + 3);
     buzzerOK();
     return;
   }
   
-  if (strncmp(cmd, "AF ", 3) == 0) {
+  if (strncmp(cmd, "AF ", 3) == 0) 
+  {
     alfaFlow = atof(cmd + 3);
     buzzerOK();
     return;
   }
 
-  if (strncmp(cmd, "RSPF ", 5) == 0) {
+  if (strncmp(cmd, "RSPF ", 5) == 0) 
+  {
     float target = atof(cmd + 5);
     float duration = atof(strchr(cmd + 5, ' ') + 1);
     rampInitialTime = float(millis())/1000; //segundos!
@@ -848,7 +880,8 @@ void processCommand(const char* cmd) {
     buzzerOK();
   } 
 
-  if (strncmp(cmd, "RSPT ", 5) == 0) {
+  if (strncmp(cmd, "RSPT ", 5) == 0) 
+  {
     float target = atof(cmd + 5);
     float duration = atof(strchr(cmd + 5, ' ') + 1);
     rampInitialTime = float(millis())/1000; //segundos!
@@ -858,6 +891,30 @@ void processCommand(const char* cmd) {
     rampFinalTime = duration + rampInitialTime;
     
     rampTempActive = true;
+    buzzerOK();
+  } 
+
+  if (strncmp(cmd, "ULP ", 4) == 0) 
+  {
+    upperLimitPump = atof(cmd + 4);
+    buzzerOK();
+  } 
+
+  if (strncmp(cmd, "LLP ", 4) == 0) 
+  {
+    lowerLimitPump = atof(cmd + 4);
+    buzzerOK();
+  } 
+
+  if (strncmp(cmd, "ULR ", 4) == 0) 
+  {
+    upperLimitRes = atof(cmd + 4);
+    buzzerOK();
+  } 
+
+  if (strncmp(cmd, "LLR ", 4) == 0) 
+  {
+    lowerLimitRes = atof(cmd + 4);
     buzzerOK();
   } 
 }
