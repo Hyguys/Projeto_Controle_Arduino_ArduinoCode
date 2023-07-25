@@ -256,51 +256,56 @@ if (rampTempActive == true)
 
     /* SEÇÃO DE TOMADA DAS TEMPERATURAS */
     float tempIn = sensorTIN.getTemp();
-    if (isnan(tempIn))
-    {
-      tempIn = 0;
-      for(int k=0 ; k<mediaMovelT ; k++)
-      {
-        tempInVector[k] = 0;
-      }
-    }
     float tempOut = sensorTOUT.getTemp();
-     if (isnan(tempOut))
-    {
-      tempOut = 0;
-      for(int k=0 ; k<mediaMovelT ; k++)
-      {
-        tempOutVector[k] = 0;
-      }
-    }
+
+   
 
     /*SEÇÃO DE CRIAÇÃO DO VETOR DE MEDIDAS PARA CÁLCULO DA MÉDIA MÓVEL */
     //assignação da temperatura de entrada na última casa do vetor
-    tempInVector[indexIn] = tempIn;
-
-    //se o índice já chegou até o final, reinicia, armazena na casa zero.
-    //se não, aumenta um no índice.
-    if (indexIn == mediaMovelT - 1)
+     if (isnan(tempIn) == false)
     {
-      indexIn = 0;
+
+      tempInVector[indexIn] = tempIn;
+
+      //se o índice já chegou até o final, reinicia, armazena na casa zero.
+      //se não, aumenta um no índice.
+      if (indexIn == mediaMovelT - 1)
+      {
+        indexIn = 0;
+      }
+      else
+      {
+        indexIn++;
+      }
+
     }
     else
     {
-      indexIn++;
+      tempIn = 0;
     }
 
-    //mesma coisa da temperatura de saída, repetindo o procedimento da temperatura de entrada.
-    tempOutVector[indexOut] = tempOut;
 
-    if (indexOut == mediaMovelT - 1)
+    if (isnan(tempOut) == false)
     {
-      indexOut = 0;
+
+      tempOutVector[indexOut] = tempOut;
+
+      //se o índice já chegou até o final, reinicia, armazena na casa zero.
+      //se não, aumenta um no índice.
+      if (indexOut == mediaMovelT - 1)
+      {
+        indexOut = 0;
+      }
+      else
+      {
+        indexOut++;
+      }
+
     }
     else
     {
-      indexOut++;
+      tempOut = 0;
     }
-
     //mesma coisa agora a vazão.
 
     /*FILTRO SPIKE VAZÃO */
@@ -355,13 +360,30 @@ if (rampTempActive == true)
     { 
       //o vetor já está completamente preenchido e portanto você pode calcular a média movel normal e também a média móvel exponencial.
       //lembrando que o código está considerando essas duas médias em SÉRIE. ou seja, como dois filtros acoplados em seguida.
-      tempInAvg = tempInAvg*alfaTemp + (1-alfaTemp)*oldTempIn;
-      tempOutAvg = tempOutAvg*alfaTemp + (1-alfaTemp)*oldTempOut;
-      flowAvg = flowAvg*alfaFlow + (1-alfaFlow)*oldFlowAvg;
 
-      oldTempIn = tempInAvg;
-      oldTempOut = tempOutAvg;
+      if (tempIn == 0)
+      {
+        tempInAvg = 0;
+      }
+      else
+      {
+        tempInAvg = tempInAvg*alfaTemp + (1-alfaTemp)*oldTempIn;
+        oldTempIn = tempInAvg;
+      }
+
+      if (tempOut == 0)
+      {
+        tempOutAvg = 0;
+      }
+      else
+      {
+        tempOutAvg = tempOutAvg*alfaTemp + (1-alfaTemp)*oldTempOut;
+        oldTempOut = tempOutAvg;
+      }
+
+      flowAvg = flowAvg*alfaFlow + (1-alfaFlow)*oldFlowAvg;
       oldFlowAvg = flowAvg;
+
     }
     
     switch (controlTypePump)
@@ -982,3 +1004,4 @@ float feedForwardPIDPosition(float kc,float tauI,float tauD,float y,float ysp,fl
   if (u < lowerlimit) {u = lowerlimit;}else{oldIntegralRes = I;}
   
   return u;
+}
