@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 2.8 27 DE JULHO DE 2023            #
+# VERSÃO 2.8.1 27 DE JULHO DE 2023          #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -24,6 +24,7 @@
 /*DECLARAÇÃO DE PINOS*/
 
 /*PINOS RELACIONADOS À SOFTWARE SERIAL E AO DIMMER AC*/
+const int rxPin = 11;
 const int txPin = 12; //porta 12 transmite informações para o Dimmer AC (é o pino RX do Dimmer, necessário fazer essa conexão elétrica)
 //a porta 12 do arduino será por onde transmitiremos informação para controlar o dimmer AC (tx = transmitter)
 
@@ -100,7 +101,7 @@ unsigned long oldTimeFlow = 0; // tempo inicial do arduino, tempo de quanto temp
 unsigned long oldTimeSampling = 0; //tempo inicial do arduino, tempo anterior de amostragem de tempo.
 float totalMilliLitres = 0; // volume inicial
 float flowMax = 72; //se a vazao passar disso ele trava a leitura nesse valor para não atrapalhar o controle. é sabido de problemas no leitor do sensor de temperatura
-int flowSpikeProtectionMax = 75; //quantidade de vezes que ele tolera a vazão ficar maluca seguido.
+//int flowSpikeProtectionMax = 75; //quantidade de vezes que ele tolera a vazão ficar maluca seguido.
 int flowSpikeCount = 0;
 
 /* SEÇÃO DE CONFIGURAÇÕES DAS BIBLIOTECAS UTILIZADAS */
@@ -317,19 +318,19 @@ if (rampTempActive == true)
     //TO-DO: implementar um check melhor. Esse é muito rudimentar. Avaliar a média movel da vazão, desvio-padrão, algo assim.
     if (flowRate > flowMax) 
     {
-      flowRate = oldFlowAvg;
-      flowSpikeCount++;
-      if (flowSpikeCount > flowSpikeProtectionMax)
-      {
-            controlTypePump = 0;
-            oldFlow = 0;
-            oldOldFlow = 0;
-            oldErrorPump = 0;
-            i = 0;
-            buzzerOK();
-            pumpPower = 0;
-            flowSpikeCount = 0;
-      }
+      //flowRate = oldFlowAvg;
+      //flowSpikeCount++;
+      //if (flowSpikeCount > flowSpikeProtectionMax)
+      //{
+      //      controlTypePump = 0;
+      //      oldFlow = 0;
+      //      oldOldFlow = 0;
+      //      oldErrorPump = 0;
+      //      i = 0;
+      //      buzzerOK();
+      //      pumpPower = 0;
+      //      flowSpikeCount = 0;
+      //}
     }
 
     flowVector[indexFlow] = flowRate;
