@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 2.8 26 DE JULHO DE 2023            #
+# VERSÃO 2.8 27 DE JULHO DE 2023            #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -24,9 +24,6 @@
 /*DECLARAÇÃO DE PINOS*/
 
 /*PINOS RELACIONADOS À SOFTWARE SERIAL E AO DIMMER AC*/
-const int rxPin = 11; //porta onze recebe informações do Dimmer AC (não é necessário fazer essa conexão elétrica)
-//ao receber um comando, o dimmer devolve uma mensagem via serial, como se fosse um "Ok, recebido!", e daria para usar para verificação se a informação
-//foi enviada corretamente. rx = receiver
 const int txPin = 12; //porta 12 transmite informações para o Dimmer AC (é o pino RX do Dimmer, necessário fazer essa conexão elétrica)
 //a porta 12 do arduino será por onde transmitiremos informação para controlar o dimmer AC (tx = transmitter)
 
