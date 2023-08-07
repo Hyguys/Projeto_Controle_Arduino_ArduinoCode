@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 2.8.1 27 DE JULHO DE 2023          #
+# VERSÃO 2.9.0 07 DE AGOSTO DE 2023         #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -55,6 +55,7 @@ float oldErrorPump = 0; //essa é uma variável global que vai armazenar o erro 
 float oldTimeControlPump = 0; //essa é uma variável global que vai armazenar o último tempo, ou seja, o tempo da última medida (EM milissegundos)
 float oldIntegralPump = 0; //essa é uma variável global que vai armazenar o último valor da integral da bomba, para ser usado no controle integral.
 float hysteresisFlow = 10; //valor da histerese inicial.
+float biasPump = 0; //bias para ser usado no controle proporcional
 
 float pumpPower = 0; //variavel auxiliar que será usada para armazenar o valor da porcentagem de acionamento da potencia da bomba (NOVA)
 float oldFlow = 0; //variavel que vai armazenar o valor da variavel controlada de 1 instante de temp atrás
@@ -74,6 +75,7 @@ float oldErrorRes = 0; //essa é uma variável global que vai armazenar o erro a
 float oldTimeControlRes = 0; //essa é uma variável global que vai armazenar o último tempo, ou seja, o tempo da última medida (EM milissegundos)
 float oldIntegralRes = 0; //essa é uma variável global que vai armazenar o último valor da integral da resistencia, para ser usado no controle integral.
 float hysteresisTemp = 3; //valor da histerese inicial.
+float biasRes = 0; //bias para ser usado no controle proporcional-integral
 
 float resPower = 0; //variavel auxiliar que será usada para armazenar o valor da porcentagem de acionamento da potencia da resistencia (NOVA)
 float oldTemp = 0; //variavel que vai armazenar o valor da variavel controlada de 1 instante de temp atrás
@@ -83,7 +85,7 @@ float upperLimitRes = 100; //limite superior da resistência para o controle ON-
 float lowerLimitRes = 0; //limite inferior da resistência para o controle ON-OFF
 
 /* CONTROLE AVANÇADO TEMPERATURA - CASCATA E FEEDFORWARD */
-//Está aqui, mas continua a implementação na forma de POSIÇÃO. Tem que ser implementada a forma de VELOCIDADE para que se possa tirar o biasFlowSetpoint.
+//Está aqui, mas continua a implementação na forma de POSIÇÃO. Tem que ser implementada a forma de VELOCIDADE/INCREMENTAL para que se possa tirar o biasFlowSetpoint.
 //Tem que ler o capítulo 14, 15 e 16 lá e buscar no Solution do Seborg 4a edição pra buscar a forma do controle PID + feedforward digital na forma de velocidade.
 float biasFlowSetpoint = 0;
 float oldj = 0;
@@ -393,23 +395,27 @@ if (rampTempActive == true)
     switch (controlTypePump)
     {
       case 0: //MANUAL
-        //i = pumpPower; //essa linha aqui é sem checar saturação.
+        //essa linha aqui é sem checar saturação.
         i = checkSaturation(i,pumpPower-i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
       case 1: //ON-OFF
         i = onoff(flowAvg,flowSetpoint,hysteresisFlow,i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
       case 2: //P
-        //i = controlPPosition(kcPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
-        i = controlPPumpVelocity(kcPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        //o bias usado é o valor da última potência da bomba acionada. admite-se que está em Regime Permanente.
+        i = controlPPosition(kcPump,flowAvg,flowSetpoint,biasPump,lowerLimitPump,upperLimitPump);
         break;
       case 3: //PI
         //i = controlPIPumpPosition(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         i = controlPIPumpVelocity(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
       case 4: //PID
         //i = controlPIDPumpPosition(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         i = controlPIDPumpVelocity(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
     }
     oldTimeControlPump = millis();
@@ -420,33 +426,44 @@ if (rampTempActive == true)
       case 0: //MANUAL
         //j = resPower; //essa linha aqui é sem checar saturação.
         j = checkSaturation(j,resPower-j,lowerLimitRes,upperLimitRes);
+        biasRes = j;
+        biasFlowSetpoint = flowSetpoint;
         break;
       case 1: //ON-OFF
         j = onoff(tempOutAvg,tempSetpoint,hysteresisTemp,j,lowerLimitRes,upperLimitRes);
+        biasRes = j;
+        biasFlowSetpoint = flowSetpoint;
         break;
       case 2: //P
-        //j = controlPPosition(kcRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
-        j = controlPResVelocity(kcRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        //o bias usado é o valor da última potência da bomba acionada. admite-se que está em Regime Permanente.
+        j = controlPPosition(kcRes,tempOutAvg,tempSetpoint,biasRes,lowerLimitRes,upperLimitRes);
+        biasFlowSetpoint = flowSetpoint;
         break;
       case 3: //PI
         //j = controlPIResPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         j = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        biasRes = j;
+        biasFlowSetpoint = flowSetpoint;
         break;
       case 4: //PID
         //j = controlPIDResPosition(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         j = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        biasRes = j;
+        biasFlowSetpoint = flowSetpoint;
         break;
       case 5: //Cascata P
         j = resPower;
-        flowSetpoint = controlPResVelocity(kcRes,tempOutAvg,tempSetpoint,j,0,70);
+        flowSetpoint = controlPPosition(kcRes,tempOutAvg,tempSetpoint,biasFlowSetpoint,0,70);
         break;
       case 6: //Cascata PI
         j = resPower;
         flowSetpoint = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,0,70);
+        biasFlowSetpoint = flowSetpoint;
         break;
       case 7: //Cascata PID
         j = resPower;
         flowSetpoint = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,0,70);
+        biasFlowSetpoint = flowSetpoint;
         break;
       //case 8:
         //oldj = j;
@@ -547,6 +564,18 @@ float onoff(float y, float ysp, float hysteresis, float atual, const int lowerli
        u = atual; 
       }
     }
+  return u;
+}
+
+//controle proporcional genérico na forma de posição.
+float controlPPosition(float kc,float y,float ysp,float Pbias,const int lowerlimit,const int upperlimit)
+{
+  float error = ysp - y; //variável de desvio do erro
+  float P = Pbias + kc*error; //P é uma variavel em bits que controla quanto de potência irá para o atuador
+  float u = P;
+  //com esses dois checks abaixo, evitamos saturação do atuador.
+  if (u > upperlimit) {u = upperlimit;}
+  if (u < lowerlimit) {u = lowerlimit;}
   return u;
 }
 
@@ -922,18 +951,7 @@ void processCommand(const char* cmd)
 // O QUE ESTÁ ABAIXO DISSO NÃO ESTÁ SENDO USADO NO CÓDIGO///
 ///ATENÇÃO ------- DESUSO --------------------------------//
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/* SEÇÃO DE CÓDIGOS DE CONTROLE P, PI E PID NA FORMA DE POSIÇÃO - NÃO É USADA MAIS DEVIDO A WINDUP E TER QUE FORNECER O VIÉS (BIAS) */
-float controlPPosition(float kc,float y,float ysp,float Pbias,const int lowerlimit,const int upperlimit)
-{
-  float error = ysp - y; //variável de desvio do erro
-  float P = Pbias + kc*error; //P é uma variavel em bits que controla quanto de potência irá para o atuador
-  float u = P;
-  //com esses dois checks abaixo, evitamos saturação do atuador.
-  if (u > upperlimit) {u = upperlimit;}
-  if (u < lowerlimit) {u = lowerlimit;}
-  return u;
-}
-
+/* SEÇÃO DE CÓDIGOS DE CONTROLE PI E PID NA FORMA DE POSIÇÃO - NÃO É USADA MAIS DEVIDO A WINDUP E TER QUE FORNECER O VIÉS (BIAS) */
 
 float controlPIPumpPosition(float kc,float tauI, float y,float ysp,float Pbias,const int lowerlimit,const int upperlimit)
 {
