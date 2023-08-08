@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 2.9.0 07 DE AGOSTO DE 2023         #
+# VERSÃO 2.9.1 08 DE AGOSTO DE 2023         #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -45,7 +45,7 @@ const int pinBuzzer = 3; //pino do buzzer - buzzer nada mais é que um mini somz
 /*CONTROLE DA VAZÃO*/
 int controlTypePump = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo
 float flowSetpoint = 35; //setpoint da vazão L/hr (faixa de operação da bomba 0 - 60 L/hr)
-float kcPump = 1; //ganho do controlador da bomba, dado nas unidades de %hr/L.
+float kcPump = 2; //ganho do controlador da bomba, dado nas unidades de %hr/L.
 //nos relatórios da IC, os valores tão multiplicados por 60, pois a medida antes era em L/min.
 float tauIPump = 2; //tau I em segundos. lembrando das aulas de controle, se tauI tende a infinito, o termo integral tende à zero.
 //portanto, ao iniciarmos o controle com um tauI grande, estamos iniciando com o controle integral desativado.
@@ -397,20 +397,18 @@ if (rampTempActive == true)
       case 0: //MANUAL
         //essa linha aqui é sem checar saturação.
         i = checkSaturation(i,pumpPower-i,lowerLimitPump,upperLimitPump);
-        biasPump = i;
         break;
       case 1: //ON-OFF
         i = onoff(flowAvg,flowSetpoint,hysteresisFlow,i,lowerLimitPump,upperLimitPump);
-        biasPump = i;
         break;
       case 2: //P
         //o bias usado é o valor da última potência da bomba acionada. admite-se que está em Regime Permanente.
+        biasPump = flowSetpoint/0.63; //relação empirica baseada no ganho
         i = controlPPosition(kcPump,flowAvg,flowSetpoint,biasPump,lowerLimitPump,upperLimitPump);
         break;
       case 3: //PI
         //i = controlPIPumpPosition(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         i = controlPIPumpVelocity(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
-        biasPump = i;
         break;
       case 4: //PID
         //i = controlPIDPumpPosition(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
