@@ -1,3 +1,5 @@
+
+
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
@@ -32,9 +34,9 @@ const int sensorInterrupt = 0;  // qual interruptor do Arduino será utilizado? 
 //interrupt 0 no Arduino Uno é o pino digital 2, pino do sensor de VAZAO (precisa ser o 2)
 
 /*PINOS RELACIONADOS À BOMBA E AO DRIVER DA BOMBA*/
-const int IN1       = 9; // saida 'positiva' do Driver da bomba (varia com PWM)
-const int IN2       = 8; // saida 'negativa' do Driver da bomba (em geral, tem 1V em relação ao GND)
-const int pinPump   = 10; // pino que controla a velocidade de giro da bomba
+const int IN1 = 9; // saida 'positiva' do Driver da bomba (varia com PWM)
+const int IN2 = 8; // saida 'negativa' do Driver da bomba (em geral, tem 1V em relação ao GND)
+const int pinPump = 10; // pino que controla a velocidade de giro da bomba
 // vamos enviar informação para o pino 10, indicando quantos % queremos acionar, e daí o driver vai fazer esse controle
 const int pinBuzzer = 3; //pino do buzzer - buzzer nada mais é que um mini somzinho para fazer apitos
 // não é necessário conectá-lo ao arduino. na verdade nunca sequer testamos se está funcionando
@@ -977,6 +979,19 @@ void processCommand(const char* cmd)
     lowerLimitRes = atof(cmd + 4);
     buzzerOK();
   } 
+
+ if (strncmp(cmd, "ADP ", 4) == 0) 
+  {
+    alfaDerivativePump = atof(cmd + 4);
+    buzzerOK();
+  }
+
+  if (strncmp(cmd, "ADR ", 4) == 0) 
+  {
+    alfaDerivativeRes = atof(cmd + 4);
+    buzzerOK();
+  }  
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1051,7 +1066,8 @@ float controlPIDResPosition(float kc,float tauI, float tauD, float y,float ysp,f
   return u;
 }
 
-float feedForwardPIPumpVelocity(float kc,float tauI,float y,float ysp,float kFF,float tau1FF, float tau2FF, const int lowerlimit,const int upperlimit)
+/* 
+float feedForwardPIPumpVelocity(float kc,float tauI,float y,float ysp,float kFF,float tau1FF, float tau2FF, float oldPower,const int lowerlimit,const int upperlimit)
 {
   float b1 = kFF*(tau1FF+interval/1000)/(tau2FF+interval/1000);
   float b2 = -kFF*tau1FF/(tau2FF+interval/1000);
@@ -1061,7 +1077,8 @@ float feedForwardPIPumpVelocity(float kc,float tauI,float y,float ysp,float kFF,
   float deltaPower = kc * ( (error - oldErrorPump) + (interval/1000)*error/tauI ) + deltaPowerFF;
   oldErrorPump = error;
   return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
-}
+} 
+*/
 
 /* SEÇÃO DE CÓDIGOS DE CONTROLE P, PI E PID FEEDFORWARD NA FORMA DE POSIÇÃO - NÃO ESTÁ SENDO USADO DEVIDO A TER QUE FORNECER O BIAS */
 float feedForwardPPosition(float kc,float y,float ysp,float kFF,float tau1FF, float tau2FF, float y1,float Pbias,const int lowerlimit,const int upperlimit)
