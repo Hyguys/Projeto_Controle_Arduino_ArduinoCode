@@ -1,9 +1,7 @@
-
-
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 2.9.1 08 DE AGOSTO DE 2023         #
+# VERSÃO 3.0.0 23 DE AGOSTO DE 2023         #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -34,16 +32,16 @@ const int sensorInterrupt = 0;  // qual interruptor do Arduino será utilizado? 
 //interrupt 0 no Arduino Uno é o pino digital 2, pino do sensor de VAZAO (precisa ser o 2)
 
 /*PINOS RELACIONADOS À BOMBA E AO DRIVER DA BOMBA*/
-const int IN1 = 9; // saida 'positiva' do Driver da bomba (varia com PWM)
-const int IN2 = 8; // saida 'negativa' do Driver da bomba (em geral, tem 1V em relação ao GND)
-const int pinPump = 10; // pino que controla a velocidade de giro da bomba
+const int IN1       = 9; // saida 'positiva' do Driver da bomba (varia com PWM)
+const int IN2       = 8; // saida 'negativa' do Driver da bomba (em geral, tem 1V em relação ao GND)
+const int pinPump   = 10; // pino que controla a velocidade de giro da bomba
 // vamos enviar informação para o pino 10, indicando quantos % queremos acionar, e daí o driver vai fazer esse controle
 const int pinBuzzer = 3; //pino do buzzer - buzzer nada mais é que um mini somzinho para fazer apitos
 // não é necessário conectá-lo ao arduino. na verdade nunca sequer testamos se está funcionando
 
 /* SEÇÃO DE DEFINIÇÃO DE PARÂMETROS DE CONTROLE */
 /*CONTROLE DA VAZÃO*/
-int controlTypePump = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo
+int controlTypePump = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo 5 - PIDf
 float flowSetpoint = 35; //setpoint da vazão L/hr (faixa de operação da bomba 0 - 60 L/hr)
 float kcPump = 2; //ganho do controlador da bomba, dado nas unidades de %hr/L.
 //nos relatórios da IC, os valores tão multiplicados por 60, pois a medida antes era em L/min.
@@ -60,13 +58,13 @@ float biasPump = 0; //bias para ser usado no controle proporcional
 float pumpPower = 0; //variavel auxiliar que será usada para armazenar o valor da porcentagem de acionamento da potencia da bomba (NOVA)
 float oldFlow = 0; //variavel que vai armazenar o valor da variavel controlada de 1 instante de temp atrás
 float oldOldFlow = 0; //variavel que vai armazenar o valor da variavel controlada de 2 instantes de temp atrás
-
+float oldDerivativeActionPump = 0; //variavel armazena o valor da ultima ação derivativa da bomba
 float upperLimitPump = 100; //limite superior da bomba
 float lowerLimitPump = 0; //limite inferior da bomba
 
 /*CONTROLE DA TEMPERATURA*/
 float tempSetpoint = 30; //setpoint da temperatura em graus celsius
-int controlTypeRes = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo 5 - CASCATAP 6 - CASCATAPI 7 - CASCATAPID 8 - FEEDFORWARD+P 9 - FFPI 10 - FFPID tipo de controle da RESISTENCIA
+int controlTypeRes = 0; //0 - MANUAL 1 - ON/OFF 2 - Proporcional 3 - Proporcional-Integral 4 - Proporcional-Integral-Derivativo 5 - PIDf 6 - CASCATAP 7 - CASCATAPI 8 - CASCATAPID 9 - FEEDFORWARD+P 10 - FFPI 11 - FFPID tipo de controle da RESISTENCIA
 float kcRes = 500; //ganho do controlador da resistência, dado nas unidades de 1/°C
 float tauIRes = 10; //tau I em segundos. lembrando das aulas de controle, se tauI tende a infinito, o termo integral tende à zero.
 float tauDRes = 5; //tau D em segundos. iniciando em zero, iniciamos com o controle derivativo desativado.
@@ -80,9 +78,10 @@ float biasRes = 0; //bias para ser usado no controle proporcional-integral
 float resPower = 0; //variavel auxiliar que será usada para armazenar o valor da porcentagem de acionamento da potencia da resistencia (NOVA)
 float oldTemp = 0; //variavel que vai armazenar o valor da variavel controlada de 1 instante de temp atrás
 float oldOldTemp = 0; //variavel que vai armazenar o valor da variavel controlada de 2 instantes de temp atrás
+float oldDerivativeActionRes = 0; //variavel armazena o valor da ultima ação derivativa da resistencia
+float upperLimitRes = 100; //limite superior da resistência
+float lowerLimitRes = 0; //limite inferior da resistência
 
-float upperLimitRes = 100; //limite superior da resistência para o controle ON-OFF
-float lowerLimitRes = 0; //limite inferior da resistência para o controle ON-OFF
 
 /* CONTROLE AVANÇADO TEMPERATURA - CASCATA E FEEDFORWARD */
 //Está aqui, mas continua a implementação na forma de POSIÇÃO. Tem que ser implementada a forma de VELOCIDADE/INCREMENTAL para que se possa tirar o biasFlowSetpoint.
@@ -130,11 +129,12 @@ float alfaTemp = 0.1; //recomenda-se valores entre 0.05 e 0.3. 0.1 indica que a 
 float alfaFlow = 0.4; //recomenda-se valores entre 0.3 e 0.8. 0.1 indica que a medida atual tem o valor somente de 10%, sendo o 90% sendo o peso das medidas anteriores.
 float oldTempIn; //valor antigo da temperatura de entrada.
 float oldTempOut; //valor antigo da temperatura de saida.
+float alfaDerivativePump = 0.2; //média móvel exponencial da saída derivativa da bomba
+float alfaDerivativeRes = 0.2; //média móvel exponencial da saída derivativa da resistencia
 
 /*INPUT PELA SERIAL*/
 char command[20];
 int commandIndex = 0;
-
 
 // Variáveis globais
 bool rampFlowActive = false;   // Indica se a rampa está em progresso
@@ -397,9 +397,11 @@ if (rampTempActive == true)
       case 0: //MANUAL
         //essa linha aqui é sem checar saturação.
         i = checkSaturation(i,pumpPower-i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
       case 1: //ON-OFF
         i = onoff(flowAvg,flowSetpoint,hysteresisFlow,i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
       case 2: //P
         //o bias usado é o valor da última potência da bomba acionada. admite-se que está em Regime Permanente.
@@ -407,12 +409,15 @@ if (rampTempActive == true)
         i = controlPPosition(kcPump,flowAvg,flowSetpoint,biasPump,lowerLimitPump,upperLimitPump);
         break;
       case 3: //PI
-        //i = controlPIPumpPosition(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         i = controlPIPumpVelocity(kcPump,tauIPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
         break;
       case 4: //PID
-        //i = controlPIDPumpPosition(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         i = controlPIDPumpVelocity(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
+        biasPump = i;
+        break;
+      case 5:
+        i = controlPIDFPumpVelocity(kcPump,tauIPump,tauDPump,flowAvg,flowSetpoint,i,lowerLimitPump,upperLimitPump);
         biasPump = i;
         break;
     }
@@ -438,40 +443,43 @@ if (rampTempActive == true)
         biasFlowSetpoint = flowSetpoint;
         break;
       case 3: //PI
-        //j = controlPIResPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         j = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         biasRes = j;
         biasFlowSetpoint = flowSetpoint;
         break;
       case 4: //PID
-        //j = controlPIDResPosition(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         j = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
         biasRes = j;
         biasFlowSetpoint = flowSetpoint;
         break;
-      case 5: //Cascata P
+      case 5: //PIDF
+        j = controlPIDFResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,lowerLimitRes,upperLimitRes);
+        biasRes = j;
+        biasFlowSetpoint = flowSetpoint;
+        break;
+      case 6: //Cascata P
         j = resPower;
         flowSetpoint = controlPPosition(kcRes,tempOutAvg,tempSetpoint,biasFlowSetpoint,0,70);
         break;
-      case 6: //Cascata PI
+      case 7: //Cascata PI
         j = resPower;
         flowSetpoint = controlPIResVelocity(kcRes,tauIRes,tempOutAvg,tempSetpoint,j,0,70);
         biasFlowSetpoint = flowSetpoint;
         break;
-      case 7: //Cascata PID
+      case 8: //Cascata PID
         j = resPower;
         flowSetpoint = controlPIDResVelocity(kcRes,tauIRes,tauDRes,tempOutAvg,tempSetpoint,j,0,70);
         biasFlowSetpoint = flowSetpoint;
         break;
-      //case 8:
+      //case 9:
         //oldj = j;
         //j = feedForwardPPosition(kcRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,lowerLimitRes,upperLimitRes);
         //break;
-      //case 9:
+      //case 10:
         //oldj = j;
         //j = feedForwardPIPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,lowerLimitRes,upperLimitRes);
         //break;
-      //case 10:
+      //case 11:
         //oldj = j;
         //j = feedForwardPIPosition(kcRes,tauIRes,tempOutAvg,tempSetpoint,kFF,tau1FF,tau2FF,flowAvg,resPower,lowerLimitRes,upperLimitRes);
         //break;
@@ -601,12 +609,27 @@ float controlPIDPumpVelocity(float kc, float tauI, float tauD, float y, float ys
   
   //estudar por um filtro de primeira ordem no termo derivativo.
   float error = ysp - y;  
-  float deltaPower = kc * ( (error - oldErrorPump) + (interval/1000)*error/tauI - tauD*(y - 2*oldFlow + oldOldFlow)/(interval/1000) );
+  float deltaPower = kc * ( (error - oldErrorPump) + (interval/1000)*error/tauI + -tauD*(y - 2*oldFlow + oldOldFlow)/(interval/1000) );
   oldErrorPump = error;
   oldOldFlow = oldFlow;
   oldFlow = y;
   return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
 }
+
+// controle proporcional integral derivativo com filtro da vazão modo velocidade
+float controlPIDFPumpVelocity(float kc, float tauI, float tauD, float y, float ysp, float oldPower, const int lowerlimit, const int upperlimit)
+{
+  
+  float error = ysp - y;  
+  float derivativeAction = -tauD*(y - 2*oldFlow + oldOldFlow)/(interval/1000)*alfaDerivativePump + (1-alfaDerivativePump)*oldDerivativeActionPump;
+  float deltaPower = kc * ( (error - oldErrorPump) + (interval/1000)*error/tauI + derivativeAction );
+  oldErrorPump = error;
+  oldOldFlow = oldFlow;
+  oldFlow = y;
+  oldDerivativeActionPump = derivativeAction;
+  return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
+}
+
 
 
 // controle proporcional da temperatura modo velocidade
@@ -642,7 +665,19 @@ float controlPIDResVelocity(float kc, float tauI, float tauD, float y, float ysp
   return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
 }
 
-
+// controle proporcional integral derivativo da vazão modo velocidade
+float controlPIDFResVelocity(float kc, float tauI, float tauD, float y, float ysp, float oldPower, const int lowerlimit, const int upperlimit)
+{
+  
+  float error = ysp - y;  
+  float derivativeAction = -tauD*(y - 2*oldTemp + oldOldTemp)/(interval/1000)*alfaDerivativeRes + (1-alfaDerivativeRes)*oldDerivativeActionRes;
+  float deltaPower = kc * ( (error - oldErrorRes) + (interval/1000)*error/tauI + derivativeAction );
+  oldErrorRes = error;
+  oldOldTemp = oldTemp;
+  oldTemp = y;
+  oldDerivativeActionRes = derivativeAction;
+  return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
+}
 // função que checa se haverá saturação do atuador. por exemplo potencia máxima é 100. se a potencia atual é 80, e a variação de potencia calculada foi de
 // 30, a próxima potencia será de 110, mas isso é superior à 100%. essa função não permite que os limites do atuador sejam violados
 // (checa se houve saturação do atuador)
@@ -1016,7 +1051,17 @@ float controlPIDResPosition(float kc,float tauI, float tauD, float y,float ysp,f
   return u;
 }
 
-
+float feedForwardPIPumpVelocity(float kc,float tauI,float y,float ysp,float kFF,float tau1FF, float tau2FF, const int lowerlimit,const int upperlimit)
+{
+  float b1 = kFF*(tau1FF+interval/1000)/(tau2FF+interval/1000);
+  float b2 = -kFF*tau1FF/(tau2FF+interval/1000);
+  float a1 = -tau2FF/(tau2FF + interval/1000);
+  float error = ysp - y;
+  float deltaPowerFF = -a1*oldPower +b1*error + b2*oldErrorPump - oldPower;
+  float deltaPower = kc * ( (error - oldErrorPump) + (interval/1000)*error/tauI ) + deltaPowerFF;
+  oldErrorPump = error;
+  return(checkSaturation(oldPower,deltaPower,lowerlimit,upperlimit));
+}
 
 /* SEÇÃO DE CÓDIGOS DE CONTROLE P, PI E PID FEEDFORWARD NA FORMA DE POSIÇÃO - NÃO ESTÁ SENDO USADO DEVIDO A TER QUE FORNECER O BIAS */
 float feedForwardPPosition(float kc,float y,float ysp,float kFF,float tau1FF, float tau2FF, float y1,float Pbias,const int lowerlimit,const int upperlimit)
