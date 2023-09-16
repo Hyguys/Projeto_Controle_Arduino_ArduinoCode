@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 3.0.0 23 DE AGOSTO DE 2023         #
+# VERSÃO 3.1.0 16 DE SETEMBRO DE 2023       #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -407,7 +407,7 @@ if (rampTempActive == true)
         break;
       case 2: //P
         //o bias usado é o valor da última potência da bomba acionada. admite-se que está em Regime Permanente.
-        biasPump = flowSetpoint/0.63; //relação empirica baseada no ganho
+        biasPump = 30 + flowSetpoint*1.054; //relação empirica baseada no ganho
         i = controlPPosition(kcPump,flowAvg,flowSetpoint,biasPump,lowerLimitPump,upperLimitPump);
         break;
       case 3: //PI
