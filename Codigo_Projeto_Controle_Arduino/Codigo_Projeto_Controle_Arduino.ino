@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 3.1.0 16 DE SETEMBRO DE 2023       #
+# VERSÃO 3.2.0 28 DE SETEMBRO DE 2023       #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -146,6 +146,7 @@ float rampInitialPoint = 0;
 float rampFinalTime = 0.0;  // Duração da rampa em segundos
 float rampTarget = 0.0;    // Valor final da rampa
 
+bool firstRun = true;
 
 /*SEÇÃO DO CÓDIGO DO ARDUINO*/
 void setup()
@@ -170,8 +171,11 @@ void setup()
   do millis() não será contado.
   Em suma, configuramos como será feita a contagem de pulsos. Posteriormente será usado para medição de frequencia.*/
   //attachInterrupt(sensorInterrupt, pulseCounter, FALLING); //you can use Rising or Falling
-  
+
+
+ 
 }
+
 
 void loop()
 {
@@ -270,50 +274,43 @@ if (rampTempActive == true)
 
     /*SEÇÃO DE CRIAÇÃO DO VETOR DE MEDIDAS PARA CÁLCULO DA MÉDIA MÓVEL */
     //assignação da temperatura de entrada na última casa do vetor
-     if (isnan(tempIn) == false)
+    if (firstRun == true)
     {
-
-      tempInVector[indexIn] = tempIn;
-
-      //se o índice já chegou até o final, reinicia, armazena na casa zero.
-      //se não, aumenta um no índice.
-      if (indexIn == mediaMovelT - 1)
+      for(int i =0;i<mediaMovelT;i++)
       {
-        indexIn = 0;
+        tempInVector[i] = tempIn;
+        tempOutVector[i] = tempOut;
       }
-      else
-      {
-        indexIn++;
-      }
+      firstRun = false;
+    }
 
+
+    tempInVector[indexIn] = tempIn;
+    //se o índice já chegou até o final, reinicia, armazena na casa zero.
+    //se não, aumenta um no índice.
+    if (indexIn == mediaMovelT - 1)
+    {
+      indexIn = 0;
     }
     else
     {
-      tempIn = 0;
+      indexIn++;
     }
+    tempOutVector[indexOut] = tempOut;
 
-
-    if (isnan(tempOut) == false)
+    //se o índice já chegou até o final, reinicia, armazena na casa zero.
+    //se não, aumenta um no índice.
+    if (indexOut == mediaMovelT - 1)
     {
-
-      tempOutVector[indexOut] = tempOut;
-
-      //se o índice já chegou até o final, reinicia, armazena na casa zero.
-      //se não, aumenta um no índice.
-      if (indexOut == mediaMovelT - 1)
-      {
-        indexOut = 0;
-      }
-      else
-      {
-        indexOut++;
-      }
-
+      indexOut = 0;
     }
     else
     {
-      tempOut = 0;
+      indexOut++;
     }
+
+  
+ 
     //mesma coisa agora a vazão.
 
     /*FILTRO SPIKE VAZÃO */
