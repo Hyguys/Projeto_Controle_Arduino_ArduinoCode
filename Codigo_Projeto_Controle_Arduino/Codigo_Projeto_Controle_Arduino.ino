@@ -3,7 +3,7 @@
 /* 
 #############################################
 # CÓDIGO PROJETO DE CONTROLE COM ARDUINO    #
-# VERSÃO 3.2.0 28 DE SETEMBRO DE 2023       #
+# VERSÃO 3.2.1 05 DE OUTUBRO DE 2023        #
 # DESENVOLVIDO POR LEANDRO FAVARETTO        #
 # PARCERIA COM O PET ENGENHARIA QUIMICA UEM #
 # DIFICULDADES ENTRAR EM CONTATO NO E-MAIL  #
@@ -255,7 +255,7 @@ if (rampTempActive == true)
     //Aqui é feita uma extrapolação. Calcula-se a frequência no intervalo mencionado e extrapola-se 1 segundo, para obtermos a vazão total.
     // Multiplicado por 60 para em L/hr
     float flowRate = 60*((interval / (millis() - oldTimeFlow)) * pulseCount)*1000 / (interval*calibrationFactor);
-
+    Serial.println((millis() - oldTimeFlow));
  
     
     // Divide the flow rate in litres/minute by 60 to determine how many litres have
@@ -267,8 +267,8 @@ if (rampTempActive == true)
     totalMilliLitres += flowMilliLitres; //é literalmente uma integração
 
     /* SEÇÃO DE TOMADA DAS TEMPERATURAS */
-    float tempIn = sensorTIN.getTemp();
-    float tempOut = sensorTOUT.getTemp();
+    float tempIn = sensorTIN.getTemp()*0.811694+0.007179*sensorTIN.getTemp()*sensorTIN.getTemp();
+    float tempOut = sensorTOUT.getTemp()*0.884535+0.005953*sensorTOUT.getTemp()*sensorTOUT.getTemp();
 
    
 
@@ -281,6 +281,8 @@ if (rampTempActive == true)
         tempInVector[i] = tempIn;
         tempOutVector[i] = tempOut;
       }
+      oldTempIn = tempIn;
+      oldTempOut = tempOut;
       firstRun = false;
     }
 
@@ -317,8 +319,8 @@ if (rampTempActive == true)
     //Filtro contra spike de vazão. É sabido que a bomba não bombeia a uma vazão superior à flowMax, portanto, quando medidas superiores à essa aparecem, devemos desconsiderá-las e repetir a medida anterior.
     // Após um certo tempo ele desliga a bomba. Quando isso acontecer, usar somente <80% < 40 L/h
     //TO-DO: implementar um check melhor. Esse é muito rudimentar. Avaliar a média movel da vazão, desvio-padrão, algo assim.
-    if (flowRate > flowMax) 
-    {
+    //if (flowRate > flowMax) 
+    //{
       //flowRate = oldFlowAvg;
       //flowSpikeCount++;
       //if (flowSpikeCount > flowSpikeProtectionMax)
@@ -332,7 +334,7 @@ if (rampTempActive == true)
       //      pumpPower = 0;
       //      flowSpikeCount = 0;
       //}
-    }
+    //}
 
     flowVector[indexFlow] = flowRate;
 
@@ -351,45 +353,33 @@ if (rampTempActive == true)
     float tempOutAvg = average(tempOutVector,mediaMovelT);
     
     /* SEÇÃO CÁLCULO DAS MÉDIAS MÓVEIS EXPONENCIAIS */
-    //CALCULAR A MÉDIA MÓVEL SOMENTE APÓS O VETOR DE MEDIDAS ESTAR COMPLETAMENTE PREENCHIDO. 
-    //ESSE TEMPO DE PREENCHIMENTO DO VETOR DEPENDE DO TAMANHO DELE E DO INTERVALO DE MEDIDAS.
-    if (float(millis())<(max(mediaMovelT,mediaMovelFlow)-1)*interval)
+    //CALCULAR A MÉDIA MÓVEL SOMENTE APÓS O VETOR DE MEDIDAS ESTAR COMPLETAMENTE PREENCHIDO.  
+    //o vetor já está completamente preenchido e portanto você pode calcular a média movel normal e também a média móvel exponencial.
+    //lembrando que o código está considerando essas duas médias em SÉRIE. ou seja, como dois filtros acoplados em seguida.
+
+    if (tempIn == 0)
     {
-      //Se essa condição é verdadeira, o vetor de medidas ainda não foi completamete preenchido, e há algum elemento que é igual a zero (ou NaN)
-      //portanto, há um Bypass no calculo da média movel e também da exponencial.
-      oldTempIn = tempIn;
-      oldTempOut = tempOut;
-      oldFlowAvg = flowRate;
+      tempInAvg = 0;
     }
     else
-    { 
-      //o vetor já está completamente preenchido e portanto você pode calcular a média movel normal e também a média móvel exponencial.
-      //lembrando que o código está considerando essas duas médias em SÉRIE. ou seja, como dois filtros acoplados em seguida.
-
-      if (tempIn == 0)
-      {
-        tempInAvg = 0;
-      }
-      else
-      {
-        tempInAvg = tempInAvg*alfaTemp + (1-alfaTemp)*oldTempIn;
-        oldTempIn = tempInAvg;
-      }
-
-      if (tempOut == 0)
-      {
-        tempOutAvg = 0;
-      }
-      else
-      {
-        tempOutAvg = tempOutAvg*alfaTemp + (1-alfaTemp)*oldTempOut;
-        oldTempOut = tempOutAvg;
-      }
-
-      flowAvg = flowAvg*alfaFlow + (1-alfaFlow)*oldFlowAvg;
-      oldFlowAvg = flowAvg;
-
+    {
+      tempInAvg = tempInAvg*alfaTemp + (1-alfaTemp)*oldTempIn;
+      oldTempIn = tempInAvg;
     }
+
+    if (tempOut == 0)
+    {
+      tempOutAvg = 0;
+    }
+    else
+    {
+      tempOutAvg = tempOutAvg*alfaTemp + (1-alfaTemp)*oldTempOut;
+      oldTempOut = tempOutAvg;
+    }
+
+    flowAvg = flowAvg*alfaFlow + (1-alfaFlow)*oldFlowAvg;
+    oldFlowAvg = flowAvg;
+
     
     switch (controlTypePump)
     {
